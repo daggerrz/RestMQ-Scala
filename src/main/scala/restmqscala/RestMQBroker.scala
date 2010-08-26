@@ -13,7 +13,15 @@ abstract trait RestMQBroker {
 object RedisRestMQBroker extends RestMQBroker {
 
   // And how do we get this thread-safe?
-  val redis = new Redis("localhost", 6379)
+  val redis_local = new ThreadLocal[Redis]
+  def redis = {
+    var r = redis_local.get
+    if (r == null) {
+      r = new Redis("localhost", 6379)
+      redis_local.set(r)
+    }
+    r
+  }
 
   val QS_STARTED = "1"
   val QS_STOPPED = "0"
