@@ -26,7 +26,9 @@ class RestMQBrokerSpec extends Specification  {
     }
     "return the correct element on get" in {
       b.add(QN, "foo")
+      b.add(QN, "bar")
       b.get(QN) must_== Some("foo")
+      b.get(QN) must_== Some("bar")
     }
     "delete the element on get" in {
       b.add(QN, "foo")

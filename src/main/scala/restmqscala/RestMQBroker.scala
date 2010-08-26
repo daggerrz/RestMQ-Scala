@@ -1,7 +1,6 @@
 package restmqscala
 
-import com.redis.Redis
-import java.util.concurrent.LinkedBlockingQueue
+import com.redis.RedisClient
 
 abstract trait RestMQBroker {
   def add(queue: String, value: String) : String
@@ -13,11 +12,11 @@ abstract trait RestMQBroker {
 object RedisRestMQBroker extends RestMQBroker {
 
   // And how do we get this thread-safe?
-  val redis_local = new ThreadLocal[Redis]
+  val redis_local = new ThreadLocal[RedisClient]
   def redis = {
     var r = redis_local.get
     if (r == null) {
-      r = new Redis("localhost", 6379)
+      r = new RedisClient("localhost", 6379)
       redis_local.set(r)
     }
     r
@@ -53,26 +52,26 @@ object RedisRestMQBroker extends RestMQBroker {
     val queueList = Names.messageList(queue)
 
     // Check if the queue exists and add it if not
-    if (!redis.setMemberExists(Names.QUEUE_SET, queueList))
+    if (!redis.sismember(Names.QUEUE_SET, queueList))
       configureNewQueue(queue, queueList)
 
     // Push the message key to the end of the queue's message list
-    redis.pushTail(queueList, key)
+    redis.rpush(queueList, key)
     key
   }
 
   protected def configureNewQueue(queue: String, lkey: String) {
-    if (redis.setAdd(Names.QUEUE_SET, queue)) {
+    if (redis.sadd(Names.QUEUE_SET, queue).get  == 1) {
       val ckey = Names.status(queue)
       redis.set(ckey, QS_STARTED)
     }    
   }
 
   def get(queue: String) : Option[String] = {
-    redis.popHead(Names.messageList(queue)) match {
+    redis.lpop(Names.messageList(queue)) match {
       case Some(key) =>
         val res = redis.get(key)
-        redis.delete(key)
+        redis.del(key)
         res
       case None => None
     }
@@ -82,22 +81,25 @@ object RedisRestMQBroker extends RestMQBroker {
    * Returns the set of existing queues.
    */
   def listQueues() : Set[String] = {
-    redis.setMembers(Names.QUEUE_SET).getOrElse(Set())
+    redis.smembers(Names.QUEUE_SET) match {
+      case Some(s) => s.flatMap( { case Some(s) => List(s) case None => Nil } ).toSet
+      case _ => Set()
+    }
   }
 
   /**
    * Returns the length of the specified queue or 0 if the queue
    * does not exist.
    */
-  def queueLen(queue: String) = redis.listLength(Names.messageList(queue)).getOrElse(0)
+  def queueLen(queue: String) = redis.llen(Names.messageList(queue)).getOrElse(0)
 
   def purge: Unit = {
     listQueues.foreach { qn =>
-      redis.delete(Names.queueCounter(qn))
-      redis.delete(Names.messageKey(qn, "*"))
-      redis.delete(Names.status(qn))
-      redis.delete(Names.messageList(qn))
+      redis.del(Names.queueCounter(qn))
+      redis.del(Names.messageKey(qn, "*"))
+      redis.del(Names.status(qn))
+      redis.del(Names.messageList(qn))
     }
-    redis.delete(Names.QUEUE_SET)
+    redis.del(Names.QUEUE_SET)
   }
 }

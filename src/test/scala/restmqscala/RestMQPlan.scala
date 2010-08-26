@@ -2,7 +2,7 @@ package restmqscala
 
 import org.specs._
 import org.specs.mock.Mockito
-import org.mockito.Matchers._ 
+//import org.mockito.Matchers._ 
 import unfiltered.request._
 
 /*class RestMQPlanSpec extends Specification with Mockito {
