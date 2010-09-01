@@ -11,8 +11,9 @@ abstract trait RestMQBroker {
 
 object RedisRestMQBroker extends RestMQBroker {
 
-  // And how do we get this thread-safe?
+  // Quick and dirty thread-safeness
   val redis_local = new ThreadLocal[RedisClient]
+
   def redis = {
     var r = redis_local.get
     if (r == null) {
@@ -57,6 +58,8 @@ object RedisRestMQBroker extends RestMQBroker {
 
     // Push the message key to the end of the queue's message list
     redis.rpush(queueList, key)
+
+
     key
   }
 
@@ -93,6 +96,9 @@ object RedisRestMQBroker extends RestMQBroker {
    */
   def queueLen(queue: String) = redis.llen(Names.messageList(queue)).getOrElse(0)
 
+  /**
+   * Purge all queue information (mainly for testing).
+   */
   def purge: Unit = {
     listQueues.foreach { qn =>
       redis.del(Names.queueCounter(qn))

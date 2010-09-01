@@ -2,6 +2,7 @@ package restmqscala
 
 import org.specs._
 import restmqscala.{RedisRestMQBroker => b}
+import java.util.concurrent.CountDownLatch
 
 class RestMQBrokerSpec extends Specification  {
 
@@ -35,6 +36,21 @@ class RestMQBrokerSpec extends Specification  {
       b.get(QN) must_== Some("foo")
       b.queueLen(QN) must_== 0
     }
+ /*   "publish payloads" in {
+      val latch = new CountDownLatch(1)
+      new Thread {
+        override def run = {
+          b.subscribe(QN){ x =>
+            println(x)
+            latch.countDown
+          }
+        }        
+      }.start
+      Thread.sleep(1000)
+      b.add(QN, "foo")
+      Thread.sleep(1000)
+      latch.getCount must_== 0
+    }*/
   }
 
 }

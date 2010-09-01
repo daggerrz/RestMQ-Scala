@@ -1,1 +1,1 @@
-value=hello
+{message:"Hello, world"}
