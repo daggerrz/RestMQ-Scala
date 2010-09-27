@@ -3,9 +3,26 @@ package restmqscala
 import com.redis.RedisClient
 
 abstract trait RestMQBroker {
+  /**
+   * Adds a value to the specified queue and creates the queue
+   * if it does not already exist.
+   */
   def add(queue: String, value: String) : String
+
+  /**
+   * Gets a value from the top of the queue if one exists.
+   */
   def get(queue: String) : Option[String]
+
+  /**
+   * Returns the length of the specified queue or 0 if the queue
+   * does not exist.
+   */
   def queueLen(queue: String) : Int
+
+  /**
+   * Returns a set of all existing queues.
+   */
   def listQueues() : Set[String]
 }
 
@@ -37,10 +54,6 @@ object RedisRestMQBroker extends RestMQBroker {
     def status(q: String) = QUEUE_STATUS + ":" + q
   }
 
-  /**
-   * Adds a value to the specified queue and creates the queue
-   * if it does not already exist.
-   */
   def add(queue: String, value: String): String = {
     // Get the next message id
     val uuid = redis.incr(Names.queueCounter(queue)).get
@@ -80,9 +93,6 @@ object RedisRestMQBroker extends RestMQBroker {
     }
   }
 
-  /**
-   * Returns the set of existing queues.
-   */
   def listQueues() : Set[String] = {
     redis.smembers(Names.QUEUE_SET) match {
       case Some(s) => s.flatMap( { case Some(s) => List(s) case None => Nil } ).toSet
@@ -90,10 +100,6 @@ object RedisRestMQBroker extends RestMQBroker {
     }
   }
 
-  /**
-   * Returns the length of the specified queue or 0 if the queue
-   * does not exist.
-   */
   def queueLen(queue: String) = redis.llen(Names.messageList(queue)).getOrElse(0)
 
   /**
