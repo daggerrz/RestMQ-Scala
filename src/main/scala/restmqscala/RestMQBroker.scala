@@ -7,7 +7,7 @@ abstract trait RestMQBroker {
    * Adds a value to the specified queue and creates the queue
    * if it does not already exist.
    */
-  def add(queue: String, value: String) : String
+  def add(queue: String, value: String) : Unit
 
   /**
    * Gets a value from the top of the queue if one exists.
@@ -29,13 +29,13 @@ abstract trait RestMQBroker {
 object RedisRestMQBroker extends RestMQBroker {
 
   // Quick and dirty thread-safeness
-  val redis_local = new ThreadLocal[RedisClient]
+  val redisLocal = new ThreadLocal[RedisClient]
 
   def redis = {
-    var r = redis_local.get
+    var r = redisLocal.get
     if (r == null) {
       r = new RedisClient("localhost", 6379)
-      redis_local.set(r)
+      redisLocal.set(r)
     }
     r
   }
@@ -48,19 +48,11 @@ object RedisRestMQBroker extends RestMQBroker {
     val QUEUE_SET = "RMQ_QUEUES"
     val QUEUE_STATUS = "RMQ_QUEUE_STATUS"
 
-    def queueCounter(q: String) = q + ":UUID"
-    def messageKey(q: String, uuid: String) = q + ":" + uuid
     def messageList(q: String) = q + ":queue"
     def status(q: String) = QUEUE_STATUS + ":" + q
   }
 
-  def add(queue: String, value: String): String = {
-    // Get the next message id
-    val uuid = redis.incr(Names.queueCounter(queue)).get
-
-    // Get the key for the message and set it
-    val key = Names.messageKey(queue, uuid.toString)
-    redis.set(key, value)
+  def add(queue: String, value: String): Unit = {
 
     // Get the message list key for the queue
     val queueList = Names.messageList(queue)
@@ -69,11 +61,9 @@ object RedisRestMQBroker extends RestMQBroker {
     if (!redis.sismember(Names.QUEUE_SET, queueList))
       configureNewQueue(queue, queueList)
 
-    // Push the message key to the end of the queue's message list
-    redis.rpush(queueList, key)
+    // Push the value to the end of the queue's message list
+    redis.rpush(queueList, value)
 
-
-    key
   }
 
   protected def configureNewQueue(queue: String, lkey: String) {
@@ -84,13 +74,7 @@ object RedisRestMQBroker extends RestMQBroker {
   }
 
   def get(queue: String) : Option[String] = {
-    redis.lpop(Names.messageList(queue)) match {
-      case Some(key) =>
-        val res = redis.get(key)
-        redis.del(key)
-        res
-      case None => None
-    }
+    redis.lpop(Names.messageList(queue))
   }
 
   def listQueues() : Set[String] = {
@@ -107,8 +91,6 @@ object RedisRestMQBroker extends RestMQBroker {
    */
   def purge: Unit = {
     listQueues.foreach { qn =>
-      redis.del(Names.queueCounter(qn))
-      redis.del(Names.messageKey(qn, "*"))
       redis.del(Names.status(qn))
       redis.del(Names.messageList(qn))
     }
